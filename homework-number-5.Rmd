@@ -1,6 +1,6 @@
 ---
 title: "homework-number-5"
-author: "Nitin Verma"
+author: "Nandini Sharma, Nitin Verma"
 date: "November 18, 2016"
 output: html_document
 ---
@@ -95,14 +95,19 @@ And these CIs compare very well with those obtained from the respective sampling
 betaCoeffAnalysis = function(d1, m1, conf.level = 0.95, n = 1000){
   if (nrow(d1) == 0 || is.null(m1)) {
     cat("ERROR!")
-    return(-1)
+    return(NULL)
   }
-  #m1
+  
+  if (conf.level > 1 || conf.level < 0) {
+    cat("ERROR!")
+    return(NULL)
+  }
+  
   y1 <- strsplit(m1, "~")[[1]][[1]] #response variable
   x1 <- strsplit(m1, "~")[[1]][[2]] #predictor variable
   
-  y <- log(d1[, c(y1)])
-  x <- log(d1[, c(x1)])
+  y <- d1[, c(y1)]
+  x <- d1[, c(x1)]
   
   rdf <- data.frame(row.names = c("method", "beta", "est.value", "SE", "CI.lower", "CI.upper"))
   
@@ -114,15 +119,14 @@ betaCoeffAnalysis = function(d1, m1, conf.level = 0.95, n = 1000){
   b1.lm <- out$coefficients[2,1]
   se.b1.lm <- out$coefficients[2,2]
   
-  CI.lm <- confint(m, m$coefficients[1], 0.95)
+  alpha <- conf.level + (1 - conf.level)/2
+  
+  CI.lm <- confint(m, level=conf.level)
+  
   b0.lm.lwr <- CI.lm[1,1]
   b0.lm.upr <- CI.lm[1,2]
   b1.lm.lwr <- CI.lm[2,1]
   b1.lm.upr <- CI.lm[2,2]
-  
-  cat(b0.lm, se.b0.lm, b0.lm.lwr, b0.lm.upr, "\n")
-  cat(b1.lm, se.b1.lm, b1.lm.lwr, b1.lm.upr, "\n")
-  cat("\n")
   
   newrecord <- data.frame(method="lm", beta="beta0", est.value=b0.lm, SE=se.b0.lm, CI.lower=b0.lm.lwr, CI.upper=b0.lm.upr)
   rdf <- rbind(rdf, newrecord)
@@ -137,8 +141,8 @@ betaCoeffAnalysis = function(d1, m1, conf.level = 0.95, n = 1000){
   for (i in 1:n) {
     
     ds <- d[sample(c(1:sz), sz, replace=TRUE), ]
-    ys <- log(ds[, c(y1)])
-    xs <- log(ds[, c(x1)])
+    ys <- ds[, c(y1)]
+    xs <- ds[, c(x1)]
     ms <- lm(ys ~ xs)
   
     beta0s[i] <- ms$coefficients[1]
@@ -150,7 +154,7 @@ betaCoeffAnalysis = function(d1, m1, conf.level = 0.95, n = 1000){
   se.b0.bs <- sd(beta0s)
   se.b1.bs <- sd(beta1s)
   
-  alpha <- conf.level + (1 - conf.level)/2
+  
   
   critval.b0 <- qt(alpha, df= length(beta0s) - 1)
   critval.b1 <- qt(alpha, df= length(beta1s) - 1)
@@ -170,9 +174,52 @@ betaCoeffAnalysis = function(d1, m1, conf.level = 0.95, n = 1000){
   newrecord = data.frame(method="bootstrap", beta="beta1", est.value=b1.bs, SE=se.b1.bs, CI.lower=b1.bs.lwr, CI.upper=b1.bs.upr)
   rdf <- rbind(rdf, newrecord)
   
-  rdf[, c(-1, -2)] <- round(rdf[, c(-1, -2)], 4)
+  rdf[, c(-1, -2)] <- round(rdf[, c(-1, -2)], 3)
   return(rdf)
 }
 
+#testing the function
 betaCoeffAnalysis(d, "HomeRange_km2~Body_mass_female_mean")
+betaCoeffAnalysis(d, "MaxLongevity_m~Brain_Size_Species_Mean")
+```
+
+###Part 4: Extra credit
+**Graph each beta value from the linear model and its corresponding mean value, lower CI and upper CI from a bootstrap as a function of number of bootstraps from 10 to 200 by 10s. HINT: the beta value from the linear model will be the same for all bootstraps and the mean beta value may not differ that much!**
+
+```{r}
+plotDf <- data.frame(row.names = c("num.bootstraps", "lm.b0", "lm.b1", "bs.b0", "bs.b1", "bs.b0.lwr", "bs.b0.upr", "bs.b1.lwr", "bs.b1.upr"))
+
+for (n in seq(from=10, to=200, by=10)) {
+  df <- betaCoeffAnalysis(d, "MaxLongevity_m~Brain_Size_Species_Mean", conf.level = 0.95, n=n)
+  
+  newrecord <- data.frame(num.bootstraps=n, lm.b0=df$est.value[1], lm.b1=df$est.value[2], bs.b0=df$est.value[3], bs.b1=df$est.value[4], bs.b0.lwr=df$CI.lower[3], bs.b0.upr=df$CI.upper[3], bs.b1.lwr=df$CI.lower[4], bs.b1.upr=df$CI.upper[4])
+  plotDf <- rbind(plotDf, newrecord)
+}
+plotDf
+
+
+plot(y=plotDf$lm.b0, x=plotDf$num.bootstraps, ylab="Beta0 (lm)", xlab="no. of samples", main="Beta0 (lm) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$lm.b0, shape=-0.4, lwd=2)
+
+plot(y=plotDf$lm.b1, x=plotDf$num.bootstraps, ylab="Beta1 (lm)", xlab="no. of samples", main="Beta1 (lm) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$lm.b1, shape=-0.4, lwd=2)
+
+par(mfrow=c(3,2))
+plot(y=plotDf$bs.b0, x=plotDf$num.bootstraps, ylab="Beta0 (Bootstrap)", xlab="no. of samples", main="Beta0 (Bootstrap) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b0, shape=-0.4, lwd=2)
+
+plot(y=plotDf$bs.b1, x=plotDf$num.bootstraps, ylab="Beta1 (Bootstrap)", xlab="no. of samples", main="Beta1 (Bootstrap) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b1, shape=-0.4, lwd=2)
+
+plot(y=plotDf$bs.b0.lwr, x=plotDf$num.bootstraps, ylab="Beta0 CI (lower)", xlab="no. of samples", main="Beta0 CI (lower) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b0.lwr, shape=-0.4, lwd=2)
+
+plot(y=plotDf$bs.b0.upr, x=plotDf$num.bootstraps, ylab="Beta0 CI (upper)", xlab="no. of samples", main="Beta0 CI (upper) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b0.upr, shape=-0.4, lwd=2)
+
+plot(y=plotDf$bs.b1.lwr, x=plotDf$num.bootstraps, ylab="Beta1 CI (lower)", xlab="no. of samples", main="Beta1 CI (lower) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b1.lwr, shape=-0.4, lwd=2)
+
+plot(y=plotDf$bs.b1.upr, x=plotDf$num.bootstraps, ylab="Beta1 CI (upper)", xlab="no. of samples", main="Beta1 CI (upper) vs. No. of Samples")
+xspline(x=plotDf$num.bootstraps, y=plotDf$bs.b1.upr, shape=-0.4, lwd=2)
 ```
